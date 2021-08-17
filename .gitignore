@@ -132,3 +132,4 @@ dmypy.json
 .idea
 local.py
 test-*.py
+app/services/*.txt
