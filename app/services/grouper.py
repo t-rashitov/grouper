@@ -5,7 +5,6 @@ import re
 import uuid
 from datetime import datetime
 
-import redis
 from datasketch import MinHash, MinHashLSH
 from pymorphy2 import MorphAnalyzer
 
@@ -22,9 +21,6 @@ except FileNotFoundError:
     russian_stopwords = ()
 
 morph_analyzer = MorphAnalyzer()
-
-
-redis_instance = redis.StrictRedis(host=REDIS_HOST, port=REDIS_PORT, db=0)
 
 
 def get_redis() -> MinHashLSH:
@@ -48,7 +44,7 @@ async def parse_articles(articles: list) -> list:
     parsed_articles = []
 
     for article in articles:
-        article = article.strip().lower().replace('ё', 'е')
+        article = article.strip().lower()
 
         words_list = re.findall('\\w+', article, flags=re.IGNORECASE or re.MULTILINE)
 
@@ -62,7 +58,7 @@ async def parse_articles(articles: list) -> list:
                     try:
                         prepared_words.append(morph_analyzer.parse(word)[0].normal_form)
                     except (AttributeError, IndexError):
-                        logger.warning(f"Word <{word}> hasn't been changed.")
+                        logger.warning(f'Word <{word}> hasn\'t been changed.')
                         prepared_words.append(word)
 
                 else:
