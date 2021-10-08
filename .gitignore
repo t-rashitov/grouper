@@ -133,3 +133,5 @@ dmypy.json
 local.py
 test-*.py
 app/services/*.txt
+locust/
+dump.rdb

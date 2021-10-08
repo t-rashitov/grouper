@@ -1,4 +1,3 @@
-import asyncio
 import logging
 import os
 import pathlib
@@ -6,14 +5,11 @@ import re
 import uuid
 from datetime import datetime
 
-import uvloop
+import redis
 from datasketch import MinHash, MinHashLSH
 from pymorphy2 import MorphAnalyzer
 
-from app.datasketch.experimental.aio.lsh import AsyncMinHashLSH
-
-asyncio.set_event_loop_policy(uvloop.EventLoopPolicy())
-
+from grouper.settings import REDIS_HOST, REDIS_PORT
 
 logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(__name__)
@@ -28,24 +24,18 @@ except FileNotFoundError:
 morph_analyzer = MorphAnalyzer()
 
 
-async def get_mongo_lsh() -> AsyncMinHashLSH:
-
-    return await AsyncMinHashLSH(threshold=0.1, weights=(0.8, 0.2), num_perm=128, storage_config={
-        'type': 'aiomongo',
-        'mongo': {'host': 'localhost', 'port': 27017, 'db': 'local'}
-    })
+redis_instance = redis.StrictRedis(host=REDIS_HOST, port=REDIS_PORT, db=0)
 
 
 def get_redis() -> MinHashLSH:
 
-    return MinHashLSH(threshold=0.1, weights=(0.8, 0.2), num_perm=256, storage_config={
+    return MinHashLSH(threshold=0.25, weights=(.85, .15), num_perm=256, storage_config={
         'type': 'redis',
-        'redis': {'host': 'localhost', 'port': 6379},
+        'redis': {'host': REDIS_HOST, 'port': REDIS_PORT},
     })
 
 
-loop = asyncio.get_event_loop()
-lsh = loop.run_until_complete(get_mongo_lsh())
+lsh = get_redis()
 
 
 async def parse_articles(articles: list) -> list:
@@ -57,7 +47,7 @@ async def parse_articles(articles: list) -> list:
 
     parsed_articles = []
 
-    for i, article in enumerate(articles, start=1):
+    for article in articles:
         article = article.strip().lower().replace('ё', 'е')
 
         words_list = re.findall('\\w+', article, flags=re.IGNORECASE or re.MULTILINE)
@@ -83,7 +73,7 @@ async def parse_articles(articles: list) -> list:
 
         words_line = ' '.join(prepared_words)
 
-        parsed_articles.append(words_line + '\n')
+        parsed_articles.append(words_line)
 
     return parsed_articles
 
@@ -96,19 +86,15 @@ async def parse_from_file(input_file_path: str, output_file_path: str):
     :return:
     """
 
-    file = open(input_file_path)
-
-    try:
+    with open(input_file_path) as file:
         articles = file.readlines()
-    finally:
-        file.close()
 
     logger.debug(f'articles count: {len(articles)}')
 
     parsed_articles = await parse_articles(articles)
 
     with open(output_file_path, 'w') as file:
-        file.writelines(parsed_articles)
+        file.writelines([article + '\n' for article in parsed_articles])
 
     logger.debug(f'parsed articles count: {len(parsed_articles)}')
 
@@ -127,19 +113,19 @@ async def get_groups(raw_articles: list[str]) -> list:
     groups = []
 
     for i, article in enumerate(articles):
-        article_set = set([word.encode('utf-8') for word in article.split(' ')])
-        # article_set = [word.encode('utf-8') for word in article.split(' ')]
-        min_hash = MinHash(num_perm=128)
-        min_hash.update_batch(list(article_set))
-        # min_hash.update_batch(article_set)
+        article_set = [word.encode('utf-8') for word in article.split(' ')]
+        min_hash = MinHash(num_perm=256)
+        min_hash.update_batch(article_set)
 
-        results = await lsh.query(min_hash)
+        results = lsh.query(min_hash)
+
+        ts = datetime.now().timestamp()
 
         if not results:
             uid = uuid.uuid1()
-            timestamp = datetime.now().timestamp()
-            await lsh.insert(f'{uid}_{timestamp}', min_hash)
+            lsh.insert(f'{uid}_{ts}', min_hash)
             groups.append(str(uid))
+
             continue
 
         result_by_groups = {}
@@ -147,6 +133,8 @@ async def get_groups(raw_articles: list[str]) -> list:
             result_uuid = result.split('_')[0]
             result_by_groups[result_uuid] = result_by_groups.get(result_uuid, 0) + 1
 
-        groups.append(max(result_by_groups, key=result_by_groups.get))
+        result = max(result_by_groups, key=result_by_groups.get)
+        lsh.insert(f'{result}_{ts}', min_hash)
+        groups.append(result)
 
     return groups

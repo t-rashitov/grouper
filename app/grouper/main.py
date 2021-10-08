@@ -1,34 +1,29 @@
 import logging
 import sys
 
-from aiohttp import web
+import uvicorn
+from fastapi import FastAPI
 
-from app.grouper.routes import setup_routers
-from app.grouper.settings import get_config
+from grouper.settings import get_config
+from grouper.views import router
 
 
-def get_app(argv=None):
-    app = web.Application()
-    app['config'] = get_config(argv)
-
-    setup_routers(app)
+def get_application() -> FastAPI:
+    app = FastAPI()
+    app.include_router(router)
 
     return app
+
+
+application = get_application()
 
 
 def main(argv):
     logging.basicConfig(level=logging.DEBUG)
 
-    app = get_app(argv)
-
     config = get_config(argv)
-    web.run_app(app, host=config['host'], port=config['port'])
+    uvicorn.run('grouper.main:application', host=config['host'], port=config['port'], workers=config['workers'])
 
 
 if __name__ == '__main__':
     main(sys.argv[1:])
-
-
-# TODO: Добавить удаление записей из БД по истечению 2-3 дней
-# TODO: Провести нагрузочное тестирование
-# TODO: Сравнить результат с сервисом на Flask + Redis

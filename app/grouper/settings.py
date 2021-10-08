@@ -1,13 +1,18 @@
 import argparse
+import os
 import pathlib
 
 from trafaret_config import commandline
 
-from app.grouper.utils import TRAFARET
+from grouper.utils import TRAFARET
 
 
 BASE_DIR = pathlib.Path(__file__).parent
 DEFAULT_CONFIG_PATH = BASE_DIR / 'config/grouper.yaml'
+
+
+REDIS_HOST = os.environ.get('REDIS_HOST', 'localhost')
+REDIS_PORT = os.environ.get('REDIS_PORT', 6379)
 
 
 def get_config(argv=None):
