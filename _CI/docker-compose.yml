@@ -1,0 +1,24 @@
+version: '3.3'
+
+services:
+  redis:
+    restart: always
+    image: redis
+    ports:
+      - 6379:6379
+
+  web:
+    restart: always
+    image: gcalendar
+    container_name: gcalendar
+    environment:
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+    ports:
+      - 8000:8000
+    build:
+      context: ../
+      dockerfile: _CI/Dockerfile
+    command: uvicorn grouper.main:application --host 0.0.0.0 --port 8000 --workers 4
+    depends_on:
+      - redis
