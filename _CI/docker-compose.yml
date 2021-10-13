@@ -9,8 +9,8 @@ services:
 
   web:
     restart: always
-    image: gcalendar
-    container_name: gcalendar
+    image: grouper
+    container_name: grouper
     environment:
       - REDIS_HOST=redis
       - REDIS_PORT=6379

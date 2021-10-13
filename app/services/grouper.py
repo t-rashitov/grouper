@@ -101,7 +101,7 @@ async def get_groups(raw_articles: list[str]) -> list:
     """
     Функция возвращает uuid группы к которой может относиться текст или создание новую группу
     :param raw_articles: список статей
-    :return:
+    :return: список хэшей группы к которой была отнесена статья
     """
 
     articles = await parse_articles(raw_articles)
